@@ -187,7 +187,7 @@ class PlaywrightManager:
     async def __aenter__(self):
         print("Playwrightを起動しています...")
         self._playwright = await async_playwright().start()
-        print("ブラウザを起動しています... (headless={})", self._headless)
+        print(f"ブラウザを起動しています... (headless={self._headless})")
         browser_instance = await self._playwright.chromium.launch(headless=self._headless)
         self._browser = await browser_instance.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36' # 一般的なUA

@@ -1,6 +1,7 @@
 import os
 import json
 import logging # logging を使うように修正
+from typing import Optional # Optional をインポート
 from openai import AsyncOpenAI
 
 # 環境変数からAPIキー、対象フィールド、モデル名を取得
@@ -30,7 +31,7 @@ else:
     logging.info("環境変数 OPENAI_TARGET_FIELDS が未設定のため、デフォルト値を使用します。")
     TARGET_FIELDS = DEFAULT_TARGET_FIELDS
 
-async def analyze_job_page_with_gpt(page_text_content: str, job_title: str, job_link: str) -> dict | None:
+async def analyze_job_page_with_gpt(page_text_content: str, job_title: str, job_link: str) -> Optional[dict]:
     if not OPENAI_API_KEY:
         logging.error("エラー: OPENAI_API_KEYが設定されていません。LLM分析をスキップします。")
         return {"元タイトル": job_title, "元リンク": job_link, "エラー": "APIキー未設定"}

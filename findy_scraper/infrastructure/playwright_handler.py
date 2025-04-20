@@ -1,5 +1,8 @@
 import asyncio
-from playwright.async_api import async_playwright, Page, BrowserContext, Playwright
+import logging
+import os
+from typing import Optional # Optional をインポート
+from playwright.async_api import async_playwright, Page, BrowserContext, Playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
 
 BASE_URL = "https://findy-code.io"
 
@@ -141,25 +144,38 @@ async def get_all_liked_job_links(page: Page) -> list[dict]:
     print(f"\n--- 合計 {len(unique_links_info)} 件のユニークな求人リンクを収集しました --- ")
     return unique_links_info
 
-async def get_job_page_content(page: Page, job_link: str, job_title: str) -> str | None:
-    print(f"テキスト取得中: {job_title} ({job_link})")
+async def get_job_page_content(page: Page, job_link: str, job_title: str) -> Optional[str]:
+    """指定された求人詳細ページのテキストコンテンツを取得する"""
+    logging.info(f"  [{job_title}] 詳細ページ取得中: {job_link}")
     try:
-        # ページの遷移と読み込み完了を待つ (タイムアウトを延長)
-        await page.goto(job_link, wait_until='networkidle', timeout=90000) 
-        await page.wait_for_timeout(1000) # 念のため少し待つ
-        
-        # body全体のテキストを取得 (より多くの情報を取得)
-        page_text_content = await page.locator('body').inner_text(timeout=30000) # タイムアウトを30秒に設定
-        print("  表示テキスト取得完了")
-        return page_text_content
-    except Exception as page_error:
-        print(f"  詳細ページのアクセスまたはテキスト取得中にエラー: {page_error}")
-        try:
-             await page.screenshot(path=f'error_page_{job_title[:20]}.png') # エラー時のスクショ
-             print(f"  エラー時のスクリーンショットを保存: error_page_{job_title[:20]}.png")
-        except Exception as ss_error:
-             print(f"  スクリーンショットの保存に失敗: {ss_error}")
-        return None # エラー時はNoneを返す
+        await page.goto(job_link, wait_until='domcontentloaded', timeout=30000) # タイムアウトを30秒に
+        await page.wait_for_timeout(1000) # レンダリング待機
+
+        # ボディ全体のテキストを取得 (より多くの情報を取得する試み)
+        # 特定のコンテナ要素があれば、それを指定する方が確実
+        # 例: content = await page.locator('#job-details-container').inner_text()
+        content = await page.locator('body').inner_text()
+
+        if not content:
+             logging.warning(f"  [{job_title}] ページからテキストコンテンツを取得できませんでした。空の内容です。")
+             # スクリーンショットやHTMLを保存してデバッグしやすくする
+             await page.screenshot(path=f"error_screenshot_{job_title[:20]}.png")
+             with open(f"error_page_{job_title[:20]}.html", "w", encoding="utf-8") as f:
+                  f.write(await page.content())
+             return None
+
+        logging.info(f"  [{job_title}] 詳細ページのテキスト取得完了。文字数: {len(content)}")
+        return content
+    except PlaywrightTimeoutError:
+        logging.error(f"  [{job_title}] ページ遷移がタイムアウトしました: {job_link}")
+        return None
+    except PlaywrightError as e:
+        # Playwright特有のエラーをキャッチ
+        logging.error(f"  [{job_title}] ページ取得中にPlaywrightエラーが発生: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"  [{job_title}] ページ取得中に予期せぬエラーが発生: {e}")
+        return None
 
 # Playwrightの起動とブラウザ操作のコンテキストマネージャ
 class PlaywrightManager:
